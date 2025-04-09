@@ -1,0 +1,349 @@
+from flask import Flask, render_template, send_file, jsonify, request
+import os
+import shutil
+import json
+import uuid
+from datetime import datetime
+from pathlib import Path
+from werkzeug.utils import secure_filename
+from flask import Flask, render_template, jsonify, request, send_file, redirect
+
+app = Flask(__name__)
+
+# Path to store metadata
+META_DIR = os.path.join(app.static_folder, 'metadata')
+os.makedirs(META_DIR, exist_ok=True)
+
+# Define animation categories
+CATEGORIES = {
+    'illustrations': 'Illustrations',
+    'loadings': 'Loadings',
+    'logo-animations': 'Logo Animations',
+    'backgrounds': 'Backgrounds',
+    'design-elements': 'Design Elements',
+    'icons': 'Icons'
+}
+
+# Ensure media directories exist
+for category in CATEGORIES:
+    for media_type in ['mp4', 'gif']:
+        media_dir = os.path.join(app.static_folder, 'animations', category, media_type)
+        os.makedirs(media_dir, exist_ok=True)
+
+@app.route('/', defaults={'category': None})
+@app.route('/<category>')
+def index(category):
+    # Always return to homepage state
+    return render_template('index.html',
+                          categories=CATEGORIES,
+                          current_category='',
+                          search_query='',
+                          current_page=1,
+                          total_pages=1,
+                          total_animations=0,
+                          animations=[])
+
+@app.route('/api/animations')
+def get_animations():
+    category = request.args.get('category', '')
+    page = int(request.args.get('page', 1))
+    per_page = 12
+    search_query = request.args.get('q', '').lower()
+    
+    animations = []
+    
+    # If category is specified, search only in that category
+    categories_to_search = [category] if category in CATEGORIES else CATEGORIES.keys()
+    
+    for current_category in categories_to_search:
+        # Check for the new structure with lottie subfolder
+        lottie_dir = os.path.join(app.static_folder, 'animations', current_category, 'lottie')
+        animations_dir = os.path.join(app.static_folder, 'animations', current_category)
+        os.makedirs(animations_dir, exist_ok=True)
+        
+        # First look in lottie subfolder
+        if os.path.exists(lottie_dir):
+            for file in os.listdir(lottie_dir):
+                if file.endswith('.json'):
+                    name = os.path.splitext(file)[0]
+                    meta_file = os.path.join(META_DIR, f'{name}.json')
+                    hashtags = []
+                    
+                    # Process animation files in lottie subfolder
+                    if os.path.exists(meta_file):
+                        with open(meta_file, 'r') as f:
+                            meta = json.load(f)
+                            hashtags = meta.get('hashtags', [])
+                    
+                    # Check if animation matches search query
+                    search_terms = name.lower() + ' ' + ' '.join(hashtags).lower()
+                    if not search_query or search_query in search_terms:
+                        animations.append({
+                            'name': name,
+                            'path': f'/static/animations/{current_category}/lottie/{file}',
+                            'category': current_category,
+                            'hashtags': hashtags
+                        })
+        
+        # Also check for files in the root directory (for backwards compatibility)
+        if os.path.exists(animations_dir):
+            for file in os.listdir(animations_dir):
+                if file.endswith('.json') and file != 'metadata.json':
+                    name = os.path.splitext(file)[0]
+                    # Skip if we already added this animation from the lottie folder
+                    if any(a['name'] == name and a['category'] == current_category for a in animations):
+                        continue
+                        
+                    meta_file = os.path.join(META_DIR, f'{name}.json')
+                    hashtags = []
+                    
+                    if os.path.exists(meta_file):
+                        with open(meta_file, 'r') as f:
+                            meta = json.load(f)
+                            hashtags = meta.get('hashtags', [])
+                    
+                    # Check if animation matches search query
+                    search_terms = name.lower() + ' ' + ' '.join(hashtags).lower()
+                    if not search_query or search_query in search_terms:
+                        animations.append({
+                            'name': name,
+                            'path': f'/static/animations/{current_category}/{file}',
+                            'category': current_category,
+                            'hashtags': hashtags
+                        })
+    
+    # Sort animations by name
+    animations.sort(key=lambda x: x['name'])
+    
+    # Pagination
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_animations = animations[start:end]
+    
+    return jsonify({
+        'animations': paginated_animations,
+        'total': len(animations),
+        'has_more': end < len(animations)
+    })
+
+
+
+@app.route('/api/hashtags/<name>', methods=['POST'])
+def update_hashtags(name):
+    data = request.get_json()
+    hashtags = data.get('hashtags', [])
+    
+    meta_file = os.path.join(META_DIR, f'{name}.json')
+    with open(meta_file, 'w') as f:
+        json.dump({'hashtags': hashtags}, f)
+    
+    return jsonify({'status': 'success'})
+
+@app.route('/api/export/<category>/<name>')
+def export_animation(category, name):
+    format_type = request.args.get('format', 'json')
+    
+    # Updated path for JSON files now in the lottie subfolder
+    file_path = os.path.join(app.static_folder, 'animations', category, 'lottie', f'{name}.json')
+    # Removed debug print
+    
+    if format_type == 'json' and not os.path.exists(file_path):
+        # Also try looking in the root directory for backward compatibility
+        old_path = os.path.join(app.static_folder, 'animations', category, f'{name}.json')
+        if os.path.exists(old_path):
+            file_path = old_path
+        else:
+            return jsonify({'error': f'Animation file not found: {name}'}), 404
+    
+    if format_type == 'json':
+        try:
+            # Read the file content directly
+            with open(file_path, 'r') as f:
+                file_content = f.read()
+            
+            # Removed debug print
+            
+            # Return the raw file content with proper headers
+            response = app.response_class(
+                response=file_content,
+                status=200,
+                mimetype='application/json'
+            )
+            response.headers['Content-Disposition'] = f'attachment; filename={name}.json'
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            return response
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    elif format_type == 'mp4':
+        # Look for mp4 file in the category/mp4 subdirectory
+        mp4_dir = os.path.join(app.static_folder, 'animations', category, 'mp4')
+        mp4_file_path = os.path.join(mp4_dir, f'{name}.mp4')
+        
+        if os.path.exists(mp4_file_path):
+            try:
+                # Return the mp4 file as an attachment
+                # Use a more compatible approach
+                return send_file(
+                    mp4_file_path,
+                    mimetype='video/mp4',
+                    as_attachment=True
+                )
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        else:
+            return jsonify({'error': f'MP4 version not available for {name}'}), 404
+            
+    elif format_type == 'gif':
+        # Look for gif file in the category/gif subdirectory
+        gif_dir = os.path.join(app.static_folder, 'animations', category, 'gif')
+        gif_file_path = os.path.join(gif_dir, f'{name}.gif')
+        
+        if os.path.exists(gif_file_path):
+            try:
+                # Return the gif file as an attachment
+                # Use a more compatible approach
+                return send_file(
+                    gif_file_path,
+                    mimetype='image/gif',
+                    as_attachment=True
+                )
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        else:
+            return jsonify({'error': f'GIF version not available for {name}'}), 404
+    
+    return jsonify({'error': 'Invalid format'}), 400
+
+@app.route('/api/upload-media', methods=['POST'])
+def upload_media():
+    """Handler for uploading MP4 and GIF files for existing animations"""
+    # Check if user is admin
+    # In a real app, you'd check session or token-based auth
+    # Here we're using a simplified approach
+    
+    # Get form data
+    file = request.files.get('file')
+    name = request.form.get('name')
+    category = request.form.get('category')
+    format_type = request.form.get('format')  # 'mp4' or 'gif'
+    
+    # Validate input
+    if not file or not name or not category or not format_type:
+        return jsonify({
+            'success': False,
+            'error': 'Missing required parameters'
+        }), 400
+        
+    if format_type not in ['mp4', 'gif']:
+        return jsonify({
+            'success': False,
+            'error': 'Invalid format type'
+        }), 400
+    
+    # Check if original animation exists
+    lottie_path = os.path.join(app.static_folder, 'animations', category, 'lottie', f'{name}.json')
+    old_path = os.path.join(app.static_folder, 'animations', category, f'{name}.json')
+    
+    if not os.path.exists(lottie_path) and not os.path.exists(old_path):
+        return jsonify({
+            'success': False,
+            'error': 'Original animation not found'
+        }), 404
+    
+    # Create directory if it doesn't exist
+    media_dir = os.path.join(app.static_folder, 'animations', category, format_type)
+    os.makedirs(media_dir, exist_ok=True)
+    
+    # Generate safe filename and save file
+    filename = f"{name}.{format_type}"
+    file_path = os.path.join(media_dir, filename)
+    
+    try:
+        file.save(file_path)
+        
+        # Return success response with the URL to the file
+        file_url = f"/static/animations/{category}/{format_type}/{filename}"
+        
+        return jsonify({
+            'success': True,
+            'url': file_url,
+            'name': filename
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/upload', methods=['POST'])
+def upload_animation():
+    # Check if the post request has the file part
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    name = request.form.get('name')
+    category = request.form.get('category')
+    tags_json = request.form.get('tags', '[]')
+    
+    # Validate inputs
+    if not file or not name or not category:
+        return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
+    
+    # Parse tags
+    try:
+        tags = json.loads(tags_json)
+    except json.JSONDecodeError:
+        tags = []
+    
+    # Determine file extension and validate format
+    filename = secure_filename(file.filename)
+    _, ext = os.path.splitext(filename)
+    allowed_extensions = ['.json', '.gif', '.mp4', '.svg']
+    
+    if ext.lower() not in allowed_extensions:
+        return jsonify({'success': False, 'error': f'File type {ext} not allowed. Allowed types: {", ".join(allowed_extensions)}'}), 400
+    
+    # Create a unique filename
+    unique_id = str(uuid.uuid4())[:8]
+    new_filename = f"{secure_filename(name)}_{unique_id}{ext}"
+    
+    # Ensure category directory exists
+    category_dir = os.path.join(app.static_folder, 'animations', category)
+    os.makedirs(category_dir, exist_ok=True)
+    
+    # Save the file
+    file_path = os.path.join(category_dir, new_filename)
+    file.save(file_path)
+    
+    # Create animation metadata
+    animation_data = {
+        'name': name,
+        'path': f"/static/animations/{category}/{new_filename}",
+        'category': category,
+        'hashtags': tags,
+        'added_date': datetime.now().isoformat()
+    }
+    
+    # Save hashtags metadata
+    meta_file = os.path.join(META_DIR, f'{name}_{unique_id}.json')
+    with open(meta_file, 'w') as f:
+        json.dump({'hashtags': tags}, f)
+    
+    return jsonify({'success': True, 'animation': animation_data})
+
+def find_free_port(start_port=5000, max_port=5050):
+    """Find a free port to run the Flask app"""
+    import socket
+    from contextlib import closing
+    
+    for port in range(start_port, max_port):
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            if sock.connect_ex(('127.0.0.1', port)) != 0:
+                return port
+    return start_port  # Fallback to default
+
+if __name__ == '__main__':
+    # Find an available port
+    port = find_free_port()
+    app.run(debug=True, host='127.0.0.1', port=port)
