@@ -1,98 +1,138 @@
-# Lottie Library
+# LootBox - Animation Asset Management Tool
 
-A modern, feature-rich web application for managing and displaying Lottie animations with multi-format support.
-
-![Lottie Library Screenshot](https://via.placeholder.com/800x450.png?text=Lottie+Library)
+LootBox is a web-based animation library application that allows you to browse, upload, and manage animation assets in various formats (JSON, MP4, GIF).
 
 ## Features
 
-### Multi-format Support
-- **JSON**: Native Lottie animation format
-- **MP4**: Video export for non-Lottie environments
-- **GIF**: Animated GIF export for universal compatibility
-- **SVG**: Frame-by-frame SVG export for static use cases
+- **Animation Library**: Browse animations organized by categories
+- **Multi-format Support**: Upload and download animations in JSON, MP4, and GIF formats
+- **Preview Functionality**: Preview animations before download
+- **Search & Filter**: Find animations by name, category, or tags
+- **Admin Interface**: Manage animation assets with an intuitive admin interface
+- **Responsive Design**: Works on desktop and mobile devices
 
-### User Interface
-- **Expandable Thumbnail Controls**: Size controls in header that expand on hover
-- **Interactive 3D Cube**: Engaging homepage animation
-- **Animated Search Bar**: Gradient underglow effect
-- **Category Filtering**: Easy navigation between animation types
-- **Responsive Design**: Works on various screen sizes
-
-### Admin Features
-- **Admin Mode**: Toggle for administrative functions
-- **Upload Interface**: Add missing media files for any animation
-- **Delete Functionality**: Remove animations with confirmation
-- **Visual Feedback**: Status indicators for all operations
-
-### Technical Highlights
-- **Robust Error Handling**: Automatic retry with exponential backoff
-- **Modal Interactions**: Scroll locking and backdrop blur effects
-- **Animation Optimization**: Efficient loading and rendering
-- **Clean Code Structure**: Maintainable and extensible design
-
-## Setup Instructions
+## Getting Started
 
 ### Prerequisites
+
 - Python 3.7+
-- Flask
+- Flask 2.0.1+
+- Modern web browser (Chrome, Firefox, Safari, Edge)
 
 ### Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/jishnujyoth/LootBox.git
-cd LootBox
+   ```
+   git clone https://github.com/jishnujyoth/LootBox.git
+   cd LootBox
+   ```
+
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+4. Run the application:
+   ```
+   python app.py
+   ```
+
+5. Access the application:
+   - Local: http://127.0.0.1:8000
+   - Network: The application will display a network URL you can use
+
+## Deployment
+
+### Server Requirements
+
+- Python 3.7+
+- 1GB+ RAM
+- 10GB+ storage (depending on the number and size of animations)
+- Linux-based OS recommended (Ubuntu 20.04+)
+
+### Deployment Options
+
+#### Option 1: Traditional Server Deployment
+
+1. Set up a server with Python 3.7+
+2. Clone the repository
+3. Install dependencies: `pip install -r requirements.txt`
+4. Set up a production WSGI server:
+   ```
+   pip install gunicorn
+   gunicorn -w 4 -b 0.0.0.0:8000 app:app
+   ```
+5. Configure Nginx as a reverse proxy (recommended)
+
+#### Option 2: Docker Deployment
+
+1. Build the Docker image:
+   ```
+   docker build -t lootbox .
+   ```
+
+2. Run the container:
+   ```
+   docker run -p 8000:8000 lootbox
+   ```
+
+#### Option 3: Cloud Platform Deployment
+
+The application can be deployed to:
+- AWS Elastic Beanstalk
+- Google Cloud Run
+- Azure App Service
+- Heroku
+
+Follow the platform-specific deployment guides.
+
+## Directory Structure
+
+```
+LootBox/
+├── app.py                 # Main application file
+├── requirements.txt       # Python dependencies
+├── static/                # Static assets
+│   ├── animations/        # Animation files
+│   │   ├── illustrations/
+│   │   ├── loadings/
+│   │   └── ...
+│   ├── metadata/          # Animation metadata
+│   └── ...
+└── templates/             # HTML templates
+    └── index.html         # Main application template
 ```
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+## Environment Variables
 
-3. Run the application:
-```bash
-python app.py
-```
+The following environment variables can be configured:
 
-4. Access the application:
-- Local access: http://127.0.0.1:8080
-- Network access: http://[your-ip-address]:8080 (shown in terminal output)
+- `PORT`: The port to run the application on (default: 8000)
+- `DEBUG`: Enable debug mode (default: False)
+- `SECRET_KEY`: Secret key for session management
 
-## Usage Guide
+## Upload Animation Component
 
-### Browsing Animations
-- Use the category buttons to filter animations
-- Adjust thumbnail size using the controls in the header
-- Search for specific animations using the search bar
+The upload animation component follows this structure:
+1. Initial state: Dropzone for file uploads with "Drop files here, or click to browse" message
+2. After file selection: Preview container appears with animation preview and progress bars below
+3. File upload process: Progress bars show upload status for each file (JSON, MP4, GIF)
+4. Form fields: Animation name, category, and hashtags fields appear below the upload section
 
-### Downloading Animations
-- Click on an animation to view details
-- Use the format buttons (JSON, MP4, GIF, SVG) to download
+## Contributing
 
-### Admin Functions
-1. Click the "Admin" button in the header to enable admin mode
-2. Upload missing media:
-   - Missing formats will show a blue "+" icon
-   - Click to upload the corresponding file
-3. Delete animations:
-   - Hover over an animation to reveal the delete button
-   - Confirm deletion in the modal dialog
-
-## Recent UI Enhancements
-
-- **Redesigned Delete Dialog**: Modern interface with trash icon and improved typography
-- **Hover-Only Delete Buttons**: Cleaner interface with contextual controls
-- **Improved Upload Icons**: Blue "+" symbol for better visual consistency
-- **Fixed Category Buttons**: Ensured proper clickability with z-index adjustments
-- **Scroll Locking**: Prevented background scrolling during modal interactions
-- **Enhanced Error Handling**: More informative messages with retry options
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit your changes: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin feature-name`
+5. Submit a pull request
 
 ## License
 
-[MIT License](LICENSE)
-
-## Acknowledgments
-
-- [Lottie by Airbnb](https://airbnb.design/lottie/) for the animation format
-- [Flask](https://flask.palletsprojects.com/) for the web framework
+This project is licensed under the MIT License - see the LICENSE file for details.
